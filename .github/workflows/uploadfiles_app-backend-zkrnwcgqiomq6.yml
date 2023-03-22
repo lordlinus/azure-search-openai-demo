@@ -42,6 +42,7 @@ jobs:
           npm install typescript
           npm create vite@latest
           npm run build
+          rm -rf node_modules
 
       # Optional: Add step to run tests here (PyTest, Django test suites, etc.)
 
