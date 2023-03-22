@@ -4,6 +4,7 @@ import time
 import logging
 import openai
 from flask import Flask, request, jsonify
+from logging.config import dictConfig
 from azure.identity import DefaultAzureCredential
 from azure.search.documents import SearchClient
 from azure.search.documents.indexes import SearchIndexClient
@@ -13,6 +14,30 @@ from approaches.readdecomposeask import ReadDecomposeAsk
 from approaches.chatreadretrieveread import ChatReadRetrieveReadApproach
 from azure.storage.blob import BlobServiceClient
 from indexdocs import index_document
+
+dictConfig(
+    {
+        "version": 1,
+        "formatters": {
+            "default": {
+                "format": "[%(asctime)s] %(levelname)s in %(module)s: %(message)s",
+            }
+        },
+        "handlers": {
+            "console": {
+                "class": "logging.StreamHandler",
+                "stream": "ext://sys.stdout",
+                "formatter": "default",
+            },
+            "file": {
+                "class": "logging.FileHandler",
+                "filename": "flask.log",
+                "formatter": "default",
+            },
+        },
+        "root": {"level": "DEBUG", "handlers": ["console","file"]},
+    }
+)
 
 # Replace these with your own values, either in environment variables or directly here
 AZURE_STORAGE_ACCOUNT = os.environ.get("AZURE_STORAGE_ACCOUNT") or "mystorageaccount"
@@ -99,7 +124,7 @@ def ask():
         r = impl.run(request.json["question"], request.json.get("overrides") or {})
         return jsonify(r)
     except Exception as e:
-        logging.exception("Exception in /ask")
+        app.logger.error("Exception in /ask")
         return jsonify({"error": str(e)}), 500
     
 @app.route("/chat", methods=["POST"])
@@ -113,12 +138,12 @@ def chat():
         r = impl.run(request.json["history"], request.json.get("overrides") or {})
         return jsonify(r)
     except Exception as e:
-        logging.exception("Exception in /chat")
+        app.logger.error("Exception in /chat")
         return jsonify({"error": str(e)}), 500
 
 @app.route("/upload", methods=["POST"])
 def upload():
-    logging.info("calling upload function")
+    app.logger.info("calling upload function")
     # Generate a unique folder name using the current time
     folder_name = str(int(time.time()))
     if 'file' not in request.files:
@@ -138,15 +163,15 @@ def upload():
     try:
         r = index_document(folder_path=folder_path, search_client=search_client,
                     blob_container=blob_container, index=AZURE_SEARCH_INDEX, index_client= index_client)
-        logging.info(r)
+        app.logger.info(r)
         success_values = [d['success'] for d in r]
         if all(success_values):
             return jsonify({'success': True})
         else:
-            logging.exception("Exception while storing or indexing files")
+            app.logger.error("Exception while storing or indexing files")
             return jsonify({'success': False, 'message': 'Some files failed to upload'})
     except Exception as e:
-        logging.exception(e)
+        app.logger.error(e)
         return jsonify({'success': False, 'error': e})
 
 def ensure_openai_token():
