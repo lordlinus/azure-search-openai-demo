@@ -118,7 +118,7 @@ def chat():
 
 @app.route("/upload", methods=["POST"])
 def upload():
-    print()
+    logging.info("calling upload function")
     # Generate a unique folder name using the current time
     folder_name = str(int(time.time()))
     if 'file' not in request.files:
@@ -138,14 +138,15 @@ def upload():
     try:
         r = index_document(folder_path=folder_path, search_client=search_client,
                     blob_container=blob_container, index=AZURE_SEARCH_INDEX, index_client= index_client)
-        print(r)
+        logging.info(r)
         success_values = [d['success'] for d in r]
         if all(success_values):
             return jsonify({'success': True})
         else:
+            logging.exception("Exception while storing or indexing files")
             return jsonify({'success': False, 'message': 'Some files failed to upload'})
     except Exception as e:
-        logging.error(e)
+        logging.exception(e)
         return jsonify({'success': False, 'error': e})
 
 def ensure_openai_token():
