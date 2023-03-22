@@ -7,7 +7,7 @@ name: Build and deploy Python app to Azure Web App - app-backend-zkrnwcgqiomq6
 on:
   push:
     branches:
-      - uploadfiles
+      - deployment
   workflow_dispatch:
 
 jobs:
