@@ -169,7 +169,7 @@ def upload():
             return jsonify({'success': True})
         else:
             app.logger.error("Exception while storing or indexing files")
-            return jsonify({'success': False, 'message': 'Some files failed to upload'})
+            return jsonify({'success': False, 'message': r['message']})
     except Exception as e:
         app.logger.error(e)
         return jsonify({'success': False, 'error': e})
