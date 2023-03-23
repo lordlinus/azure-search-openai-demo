@@ -3,6 +3,7 @@ import io
 import glob
 from pypdf import PdfReader, PdfWriter
 from azure.search.documents.indexes.models import *
+import logging
 MAX_SECTION_LENGTH = 1000
 SENTENCE_SEARCH_LIMIT = 100
 SECTION_OVERLAP = 100
@@ -10,18 +11,22 @@ SECTION_OVERLAP = 100
 def index_document(folder_path, search_client, blob_container, index,index_client, category=None,verbose=True):
     status = []
     for filename in glob.glob(os.path.join(folder_path, "*")):
-        print(f"Indexing {filename} ")
+        logging.info(f"Indexing {filename} ")
+        success = True
+        error_message = ""
         try:
             pages = PdfReader(filename).pages
             u = upload_blobs(os.path.basename(filename), pages, blob_container, verbose=verbose )
-            print(f"Uploading blobs for {filename} -> {u}")
+            logging.info(f"Uploading blobs for {filename} -> {u}")
             sections = create_sections(os.path.basename(filename), pages, category, verbose=verbose)
-            print(f"Creating sections for {filename} -> {sections}")
+            logging.info(f"Creating sections for {filename} -> {sections}")
             i = index_sections(os.path.basename(filename), sections=sections, search_client=search_client, index=index, index_client= index_client, verbose=verbose)
-            print(f"Indexing sections for {filename} -> {i}")
-            status.append ({"success": True, "message": "OK", "filename": filename})
+            logging.info(f"Indexing sections for {filename} -> {i}")
         except Exception as e:
-            status.append ({"success": False, "message": str(e)})
+            success = False
+            error_message = f"Failed with error mesg: {str(e)}"
+        finally:
+            status.append({"success": success, "message": error_message, "filename": filename})
     return status
     
 def blob_name_from_file_page(filename, page):
@@ -33,7 +38,7 @@ def upload_blobs(filename, pages, blob_container, verbose):
             blob_container.create_container()
         for i in range(len(pages)):
             blob_name = blob_name_from_file_page(filename, i)
-            if verbose: print(f"\tUploading blob for page {i} -> {blob_name}")
+            if verbose: logging.info(f"\tUploading blob for page {i} -> {blob_name}")
             f = io.BytesIO()
             writer = PdfWriter()
             writer.add_page(pages[i])
@@ -46,7 +51,7 @@ def upload_blobs(filename, pages, blob_container, verbose):
 def split_text(pages, verbose):
     SENTENCE_ENDINGS = [".", "!", "?"]
     WORDS_BREAKS = [",", ";", ":", " ", "(", ")", "[", "]", "{", "}", "\t", "\n"]
-    if verbose: print(f"Splitting '{pages}' into sections")
+    if verbose: logging.info(f"Splitting '{pages}' into sections")
 
     page_map = []
     offset = 0
@@ -111,7 +116,7 @@ def create_sections(filename, pages, category, verbose):
         }
 
 def create_search_index(index, index_client, verbose):
-    if verbose: print(f"Ensuring search index {index} exists")
+    if verbose: logging.info(f"Ensuring search index {index} exists")
     if index not in index_client.list_index_names():
         index = SearchIndex(
             name=index,
@@ -128,14 +133,14 @@ def create_search_index(index, index_client, verbose):
                     prioritized_fields=PrioritizedFields(
                         title_field=None, prioritized_content_fields=[SemanticField(field_name='content')]))])
         )
-        if verbose: print(f"Creating {index} search index")
+        if verbose: logging.info(f"Creating {index} search index")
         index_client.create_index(index)
     else:
-        if verbose: print(f"Search index {index} already exists")
+        if verbose: logging.info(f"Search index {index} already exists")
 
 def index_sections(filename, sections, search_client, index, index_client,verbose):
     create_search_index(index, index_client, verbose=verbose)
-    if verbose: print(f"Indexing sections from '{filename}' into search index '{index}'")
+    if verbose: logging.info(f"Indexing sections from '{filename}' into search index '{index}'")
     i = 0
     batch = []
     for s in sections:
@@ -144,10 +149,10 @@ def index_sections(filename, sections, search_client, index, index_client,verbos
         if i % 1000 == 0:
             results = search_client.index_documents(batch=batch)
             succeeded = sum([1 for r in results if r.succeeded])
-            if verbose: print(f"\tIndexed {len(results)} sections, {succeeded} succeeded")
+            if verbose: logging.info(f"\tIndexed {len(results)} sections, {succeeded} succeeded")
             batch = []
 
     if len(batch) > 0:
         results = search_client.upload_documents(documents=batch)
         succeeded = sum([1 for r in results if r.succeeded])
-        if verbose: print(f"\tIndexed {len(results)} sections, {succeeded} succeeded")
+        if verbose: logging.info(f"\tIndexed {len(results)} sections, {succeeded} succeeded")

@@ -35,26 +35,30 @@ dictConfig(
                 "formatter": "default",
             },
         },
-        "root": {"level": "DEBUG", "handlers": ["console","file"]},
+        "root": {"level": "DEBUG", "handlers": ["console", "file"]},
     }
 )
 
 # Replace these with your own values, either in environment variables or directly here
-AZURE_STORAGE_ACCOUNT = os.environ.get("AZURE_STORAGE_ACCOUNT") or "mystorageaccount"
-AZURE_STORAGE_CONTAINER = os.environ.get("AZURE_STORAGE_CONTAINER") or "content"
+AZURE_STORAGE_ACCOUNT = os.environ.get(
+    "AZURE_STORAGE_ACCOUNT") or "mystorageaccount"
+AZURE_STORAGE_CONTAINER = os.environ.get(
+    "AZURE_STORAGE_CONTAINER") or "content"
 AZURE_SEARCH_SERVICE = os.environ.get("AZURE_SEARCH_SERVICE") or "gptkb"
 AZURE_SEARCH_INDEX = os.environ.get("AZURE_SEARCH_INDEX") or "gptkbindex"
 AZURE_OPENAI_SERVICE = os.environ.get("AZURE_OPENAI_SERVICE") or "myopenai"
-AZURE_OPENAI_GPT_DEPLOYMENT = os.environ.get("AZURE_OPENAI_GPT_DEPLOYMENT") or "davinci"
-AZURE_OPENAI_CHATGPT_DEPLOYMENT = os.environ.get("AZURE_OPENAI_CHATGPT_DEPLOYMENT") or "chat"
+AZURE_OPENAI_GPT_DEPLOYMENT = os.environ.get(
+    "AZURE_OPENAI_GPT_DEPLOYMENT") or "davinci"
+AZURE_OPENAI_CHATGPT_DEPLOYMENT = os.environ.get(
+    "AZURE_OPENAI_CHATGPT_DEPLOYMENT") or "chat"
 
 KB_FIELDS_CONTENT = os.environ.get("KB_FIELDS_CONTENT") or "content"
 KB_FIELDS_CATEGORY = os.environ.get("KB_FIELDS_CATEGORY") or "category"
 KB_FIELDS_SOURCEPAGE = os.environ.get("KB_FIELDS_SOURCEPAGE") or "sourcepage"
 UPLOAD_FOLDER = os.environ.get("UPLOAD_FOLDER") or "/tmp"
 ALLOWED_FILE_EXTENSIONS = {'pdf'}
-# Use the current user identity to authenticate with Azure OpenAI, Cognitive Search and Blob Storage (no secrets needed, 
-# just use 'az login' locally, and managed identity when deployed on Azure). If you need to use keys, use separate AzureKeyCredential instances with the 
+# Use the current user identity to authenticate with Azure OpenAI, Cognitive Search and Blob Storage (no secrets needed,
+# just use 'az login' locally, and managed identity when deployed on Azure). If you need to use keys, use separate AzureKeyCredential instances with the
 # keys for each service
 # If you encounter a blocking error during a DefaultAzureCredntial resolution, you can exclude the problematic credential by using a parameter (ex. exclude_shared_token_cache_credential=True)
 azure_credential = DefaultAzureCredential()
@@ -66,7 +70,8 @@ openai.api_version = "2022-12-01"
 
 # Comment these two lines out if using keys, set your API key in the OPENAI_API_KEY environment variable instead
 openai.api_type = "azure_ad"
-openai_token = azure_credential.get_token("https://cognitiveservices.azure.com/.default")
+openai_token = azure_credential.get_token(
+    "https://cognitiveservices.azure.com/.default")
 openai.api_key = openai_token.token
 
 # Set up clients for Cognitive Search and Storage
@@ -79,7 +84,7 @@ index_client = SearchIndexClient(
     index_name=AZURE_SEARCH_INDEX,
     credential=azure_credential)
 blob_client = BlobServiceClient(
-    account_url=f"https://{AZURE_STORAGE_ACCOUNT}.blob.core.windows.net", 
+    account_url=f"https://{AZURE_STORAGE_ACCOUNT}.blob.core.windows.net",
     credential=azure_credential)
 blob_container = blob_client.get_container_client(AZURE_STORAGE_CONTAINER)
 
@@ -97,14 +102,17 @@ chat_approaches = {
 
 app = Flask(__name__)
 
+
 @app.route("/", defaults={"path": "index.html"})
 @app.route("/<path:path>")
 def static_file(path):
     return app.send_static_file(path)
 
-# Serve content files from blob storage from within the app to keep the example self-contained. 
+# Serve content files from blob storage from within the app to keep the example self-contained.
 # *** NOTE *** this assumes that the content files are public, or at least that all users of the app
 # can access all the files. This is also slow and memory hungry.
+
+
 @app.route("/content/<path>")
 def content_file(path):
     blob = blob_container.get_blob_client(path).download_blob()
@@ -112,7 +120,8 @@ def content_file(path):
     if mime_type == "application/octet-stream":
         mime_type = mimetypes.guess_type(path)[0] or "application/octet-stream"
     return blob.readall(), 200, {"Content-Type": mime_type, "Content-Disposition": f"inline; filename={path}"}
-    
+
+
 @app.route("/ask", methods=["POST"])
 def ask():
     ensure_openai_token()
@@ -121,12 +130,14 @@ def ask():
         impl = ask_approaches.get(approach)
         if not impl:
             return jsonify({"error": "unknown approach"}), 400
-        r = impl.run(request.json["question"], request.json.get("overrides") or {})
+        r = impl.run(request.json["question"],
+                     request.json.get("overrides") or {})
         return jsonify(r)
     except Exception as e:
         app.logger.error("Exception in /ask")
         return jsonify({"error": str(e)}), 500
-    
+
+
 @app.route("/chat", methods=["POST"])
 def chat():
     ensure_openai_token()
@@ -135,11 +146,13 @@ def chat():
         impl = chat_approaches.get(approach)
         if not impl:
             return jsonify({"error": "unknown approach"}), 400
-        r = impl.run(request.json["history"], request.json.get("overrides") or {})
+        r = impl.run(request.json["history"],
+                     request.json.get("overrides") or {})
         return jsonify(r)
     except Exception as e:
         app.logger.error("Exception in /chat")
         return jsonify({"error": str(e)}), 500
+
 
 @app.route("/upload", methods=["POST"])
 def upload():
@@ -151,7 +164,7 @@ def upload():
     if len(request.files.getlist('file')) == 0:
         return jsonify({'error': 'No file selected'})
     for file in request.files.getlist('file'):
-        print(f"Uploading file {file.filename} to {folder_name}")
+        app.logger.info(f"Uploading file {file.filename} to {folder_name}")
         # Create the folder if it doesn't exist
         folder_path = os.path.join(UPLOAD_FOLDER, folder_name)
         if not os.path.exists(folder_path):
@@ -159,30 +172,35 @@ def upload():
         file_path = os.path.join(folder_path, file.filename)
         if file and allowed_file(file.filename):
             file.save(file_path)
-            print(f"Uploaded file to {file_path}")
+            app.logger.info(f"Uploaded file to {file_path}")
     try:
         r = index_document(folder_path=folder_path, search_client=search_client,
-                    blob_container=blob_container, index=AZURE_SEARCH_INDEX, index_client= index_client)
+                           blob_container=blob_container, index=AZURE_SEARCH_INDEX, index_client=index_client)
         app.logger.info(r)
         success_values = [d['success'] for d in r]
         if all(success_values):
             return jsonify({'success': True})
         else:
             app.logger.error("Exception while storing or indexing files")
-            return jsonify({'success': False, 'message': r['message']})
+            # TODO: return all error messages instead of first error
+            return jsonify({'success': False, 'message': r[0]['message']})
     except Exception as e:
         app.logger.error(e)
         return jsonify({'success': False, 'error': e})
 
+
 def ensure_openai_token():
     global openai_token
     if openai_token.expires_on < int(time.time()) - 60:
-        openai_token = azure_credential.get_token("https://cognitiveservices.azure.com/.default")
+        openai_token = azure_credential.get_token(
+            "https://cognitiveservices.azure.com/.default")
         openai.api_key = openai_token.token
+
 
 def allowed_file(filename):
     return '.' in filename and \
-           filename.rsplit('.', 1)[1].lower() in ALLOWED_FILE_EXTENSIONS    
+           filename.rsplit('.', 1)[1].lower() in ALLOWED_FILE_EXTENSIONS
+
 
 if __name__ == "__main__":
     app.run()
