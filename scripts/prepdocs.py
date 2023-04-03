@@ -55,7 +55,10 @@ if not args.localpdfparser:
 
 def blob_name_from_file_page(filename, page = 0):
     if os.path.splitext(filename)[1].lower() == ".pdf":
-        return os.path.splitext(os.path.basename(filename))[0] + f"-{page}" + ".pdf"
+        # Remove spaces and dots from filename
+        cleaned_filename = os.path.splitext(os.path.basename(filename))[0].replace(" ", "_").replace(".", "")
+        # Limit filename to first 16 characters
+        return cleaned_filename[:16] + f"-{page}" + ".pdf"
     else:
         return os.path.basename(filename)
 
