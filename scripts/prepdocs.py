@@ -60,7 +60,7 @@ def blob_name_from_file_page(filename, page = 0):
         # Limit filename to first 16 characters
         return cleaned_filename[:16] + f"-{page}" + ".pdf"
     else:
-        return os.path.basename(filename)
+        return os.path.basename(filename).replace(" ", "_").replace(".", "")
 
 def upload_blobs(filename):
     blob_service = BlobServiceClient(account_url=f"https://{args.storageaccount}.blob.core.windows.net", credential=storage_creds)
